@@ -148,9 +148,37 @@ async def root():
     return RedirectResponse("/docs")
 
 @app.get("/ffinfo")
-async def ffinfo_redirect(uid: str = Query(..., description="User ID")):
-    """Redirect to danger info service"""
-    redirect_url = f"https://danger-info-alpha.vercel.app/accinfo?uid={uid}&key=DANGERxINFO"
+async def ffinfo_redirect(
+    uid: str = Query(..., description="User ID"),
+    api_key: str = Query(..., description="Your API key")
+):
+    """Redirect to danger info service - COST: 1 credit per request"""
+    start_time = datetime.utcnow()
+    
+    # Check if user has enough credits (1 credit needed)
+    if not check_credits(api_key, 1):
+        raise HTTPException(status_code=402, detail="Insufficient credits. This service costs 1 credit.")
+    
+    # Validate API key
+    conn = get_db_connection()
+    key_data = conn.execute(
+        'SELECT * FROM api_keys WHERE key = ? AND is_active = 1',
+        (api_key,)
+    ).fetchone()
+    
+    if not key_data:
+        conn.close()
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    # Replace the dangerous text with developer info
+    redirect_url = f"https://danger-info-alpha.vercel.app/accinfo?uid={uid}&key=MK_DEVELOPER"
+    
+    # Deduct credits and log request
+    response_time = (datetime.utcnow() - start_time).total_seconds()
+    use_credits(api_key, 1)
+    update_usage(api_key)
+    log_request(api_key, "/ffinfo", f"uid={uid}", response_time, 1)
+    
     return RedirectResponse(redirect_url)
 
 @app.get("/api_key")
@@ -267,14 +295,11 @@ async def image_generation(
             response = await client.get(pollinations_url, params=params)
             response.raise_for_status()
             
-            # Return image information with direct photo URL
+            # Return direct image URL
             direct_image_url = f"https://image.pollinations.ai/prompt/{prompt}?width={width}&height={height}&nologo=true"
-            image_response = {
-                "image_url": direct_image_url,
-                "prompt": prompt,
-                "dimensions": f"{width}x{height}",
-                "note": "Visit the URL to see your generated image"
-            }
+            
+            # Return the image URL directly for immediate display
+            return direct_image_url
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Image service error: {str(e)}")
@@ -284,7 +309,7 @@ async def image_generation(
     update_usage(api_key)
     log_request(api_key, "/image", prompt, response_time, 0)
     
-    return image_response
+    return direct_image_url
 
 @app.get("/qr")
 async def qr_generation(
@@ -354,20 +379,11 @@ async def voice_generation(
     
     # Call text-to-speech API
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            # Using OpenAI TTS API or similar service
-            tts_url = f"https://api.openai.com/v1/audio/speech"
-            # For demo purposes, using a placeholder TTS service
-            # In production, you'd integrate with a real TTS API
-            voice_url = f"https://api.soundoftext.com/sounds/{text.lower().replace(' ', '+')}?voice={voice}"
-            
-            # For now, return a structured response
-            voice_response = {
-                "voice_url": voice_url,
-                "text": text,
-                "voice": voice,
-                "note": "Visit the URL to hear your generated speech"
-            }
+        # Return direct voice URL
+        voice_url = f"https://api.soundoftext.com/sounds/{text.lower().replace(' ', '+')}?voice={voice}"
+        
+        # Return the direct voice URL for immediate access
+        return voice_url
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Voice service error: {str(e)}")
@@ -377,7 +393,7 @@ async def voice_generation(
     update_usage(api_key)
     log_request(api_key, "/voice", text, response_time, 0)
     
-    return voice_response
+    return voice_url
 
 # Paid endpoints (require credits)
 @app.get("/num")
