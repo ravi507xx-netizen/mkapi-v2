@@ -2,25 +2,25 @@
   "version": 2,
   "builds": [
     {
-      "src": "app.py",
+      "src": "app_serverless.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/app.py"
+      "dest": "/app_serverless.py"
     }
   ],
   "functions": {
-    "app.py": {
+    "app_serverless.py": {
       "runtime": "python3.11",
       "maxDuration": 60
     }
   },
   "env": {
     "PYTHON_VERSION": "3.11",
-    "PYTHONPATH": "app.py"
+    "PYTHONPATH": "app_serverless.py"
   },
   "regions": ["iad1"],
   "headers": [
@@ -79,7 +79,7 @@
   "rewrites": [
     {
       "source": "/health",
-      "destination": "/app.py/health"
+      "destination": "/app_serverless.py/health"
     }
   ]
 }
